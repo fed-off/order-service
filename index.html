@@ -10,10 +10,18 @@
 
 <main class="app no-print">
 
+    <header class="topbar">
+        <h1>Сменное задание — лазерная резка</h1>
+        <a class="topbar-link" href="report.html" id="reportLink">
+            <span class="topbar-meta" id="baseInfo"></span>
+            <span class="topbar-go">Справочник по таблице и отчёт базы →</span>
+        </a>
+    </header>
+
     <!-- 1. Параметры смены -->
     <section class="panel">
         <header class="panel-head">
-            <h2><span class="step">01</span>Параметры смены</h2>
+            <h2>Параметры смены</h2>
         </header>
         <div class="row row-shift">
             <div class="field field-date">
@@ -30,7 +38,7 @@
     <!-- 2. Назначение изделий на станок -->
     <section class="panel">
         <header class="panel-head">
-            <h2><span class="step">02</span>Назначение изделий на станок</h2>
+            <h2>Назначение изделий на станок</h2>
             <span class="hint">↑ ↓ — навигация по списку, Enter — выбор / добавление, Esc — закрыть</span>
         </header>
 
@@ -76,28 +84,39 @@
         </div>
 
         <!-- Предварительный просмотр добавляемой позиции -->
-        <div class="preview" id="preview" data-state="empty">
-            <div class="preview-title">Будет добавлено</div>
+        <!-- data-mode="manual": вместо значений из базы — поля ручного ввода (m*) -->
+        <div class="preview" id="preview" data-state="empty" data-mode="db">
+            <div class="preview-title">
+                <span id="previewTitle">Будет добавлено</span>
+                <button type="button" class="btn-mini" id="manualBtn">Ввести вручную</button>
+            </div>
             <div class="preview-grid">
                 <div class="out out-product">
-                    <span class="out-label">Изделие</span>
+                    <label class="out-label" for="mProduct">Изделие</label>
                     <output id="pvProduct">—</output>
+                    <input type="text" id="mProduct" class="m-input" placeholder="Название изделия" autocomplete="off">
                 </div>
                 <div class="out out-file">
-                    <span class="out-label">Имя файла</span>
+                    <label class="out-label" for="mFile">Имя файла</label>
                     <output id="pvFile" class="file-cell"><span class="file-name">—</span></output>
+                    <input type="text" id="mFile" class="m-input m-file" placeholder="Имя файла" autocomplete="off" spellcheck="false">
+                    <input type="text" id="mDesc" class="m-input m-desc" placeholder="Детали (необязательно)" autocomplete="off">
                 </div>
                 <div class="out">
-                    <span class="out-label">Расст. между головами</span>
+                    <label class="out-label" for="mDistance">Расст. между головами</label>
                     <output id="pvDistance" class="num">—</output>
+                    <div class="m-unit m-input" data-unit="см">
+                        <input type="text" id="mDistance" class="num" placeholder="0" inputmode="decimal" autocomplete="off">
+                    </div>
                 </div>
                 <div class="out">
                     <span class="out-label">Запусков</span>
                     <output id="pvRuns" class="num">—</output>
                 </div>
                 <div class="out">
-                    <span class="out-label">Время на файл</span>
+                    <label class="out-label" for="mTime">Время на файл</label>
                     <output id="pvTimeOne" class="num">—</output>
+                    <input type="text" id="mTime" class="m-input num" placeholder="чч:мм:сс" inputmode="numeric" autocomplete="off">
                 </div>
                 <div class="out out-accent">
                     <span class="out-label">Общее время</span>
@@ -118,7 +137,7 @@
     <!-- 3. Сформированное задание -->
     <section class="panel">
         <header class="panel-head">
-            <h2><span class="step">03</span>Сменное задание по станкам</h2>
+            <h2>Сменное задание по станкам</h2>
             <div class="summary" id="summary"></div>
         </header>
 
@@ -133,26 +152,12 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<!-- Область печати (A4). Внешняя таблица с thead/tfoot даёт поля на каждой странице,
-     при этом @page margin: 0 отключает колонтитулы браузера (URL, дату, заголовок). -->
-<div id="pdfArea" class="print-only">
-    <table class="print-frame">
-        <thead><tr><td><div class="print-gap"></div></td></tr></thead>
-        <tfoot><tr><td><div class="print-gap"></div></td></tr></tfoot>
-        <tbody><tr><td>
-            <div class="pdf-header">
-                <h2>СМЕННОЕ ЗАДАНИЕ НА ЛАЗЕРНУЮ РЕЗКУ</h2>
-                <div class="pdf-meta">
-                    <span><strong>Оператор:</strong> <span id="pdfOperator">-</span></span>
-                    <span><strong>Дата:</strong> <span id="pdfDate">-</span></span>
-                </div>
-            </div>
-            <div id="pdfMachinesContent"></div>
-        </td></tr></tbody>
-    </table>
-</div>
+<!-- Область печати (A4). Страницы (.pdf-page) собирает app.js: разбивка и нумерация
+     считаются заранее, поэтому @page margin: 0 отключает колонтитулы браузера (URL, дату). -->
+<div id="pdfArea" class="print-only pdf-sheet"></div>
 
 <script src="data.js"></script>
+<script src="report.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
