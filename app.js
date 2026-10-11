@@ -84,13 +84,37 @@ function formatDuration(sec) {
     return `${pad2(Math.floor(s / 3600))}:${pad2(Math.floor(s % 3600 / 60))}:${pad2(s % 60)}`;
 }
 
-/** «ч:мм:сс» или «мм:сс» -> секунды; иначе null. */
+/** Поле времени «чч[:мм[:сс]]» -> секунды (недостающие минуты/секунды — нули); иначе null. */
 function parseDuration(value) {
-    const s = String(value).trim();
-    if (!/^\d+(:\d{1,2}){1,2}$/.test(s)) return null;
-    const p = s.split(':').map(Number);
-    if (p.slice(1).some(n => n > 59)) return null;
-    return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1];
+    const s = String(value).trim().replace(/:$/, '');
+    if (!/^\d{1,2}(:\d{1,2}){0,2}$/.test(s)) return null;
+    const [h, m = 0, sec = 0] = s.split(':').map(Number);
+    if (m > 59 || sec > 59) return null;
+    return h * 3600 + m * 60 + sec;
+}
+
+/**
+ * Маска «чч:мм:сс»: цифры раскладываются по группам из двух, «:» подставляется сам
+ * (при вводе следующей цифры — чтобы Backspace не упирался в двоеточие).
+ * Введённое вручную «:» закрывает группу: «1:5» -> «01:05»; вставка «1:05:00» тоже понимается.
+ */
+function maskDuration(raw) {
+    const groups = [''];
+    for (const ch of String(raw)) {
+        const last = groups.length - 1;
+        if (/\d/.test(ch)) {
+            if (groups[last].length === 2) {
+                if (groups.length === 3) break;
+                groups.push('');
+            }
+            groups[groups.length - 1] += ch;
+        } else if (ch === ':' && groups[last] && groups.length < 3) {
+            groups[last] = groups[last].padStart(2, '0');
+            groups.push('');
+        }
+    }
+    // Пустая последняя группа бывает только после введённого «:» — оставляем его («01:»).
+    return groups.join(':');
 }
 
 /** Расстояние из поля: пусто -> 0 (нет данных), «75,5» / «75.5» -> число, иначе null. */
@@ -290,6 +314,7 @@ function selectItem(item) {
     searchClear.hidden = false;
     closeResults();
     updatePreview();
+    saveState();
     runsInput.focus();
     runsInput.select();
 }
@@ -393,6 +418,7 @@ function onParamsChange() {
     updatePreview();
     if (!searchResults.hidden) renderSearchResults();
     markCurrentMachine();
+    saveState();
 }
 
 machineSelect.addEventListener('change', onParamsChange);
@@ -546,6 +572,10 @@ function draftItem(d, heads) {
         manualBase.fileDescription === d.desc && hd.distanceCm === d.distanceCm && hd.timeSec === d.timeSec) {
         return manualBase;
     }
+    return manualItem(d, heads);
+}
+
+function manualItem(d, heads) {
     return {
         // Одинаковые ручные позиции получают один ключ — запуски суммируются, как у позиций базы.
         key: 'manual:' + JSON.stringify([d.product, d.fileName, d.desc, d.distanceCm, d.timeSec]),
@@ -595,6 +625,7 @@ function exitManual() {
     manualBase = null;
     Object.values(mFields).forEach(el => { el.value = ''; });
     updatePreview();
+    saveState();
 }
 
 manualBtn.addEventListener('click', () => {
@@ -622,7 +653,52 @@ Object.values(mFields).forEach(el => {
     });
 });
 
-// «1:5:0» / «12:30» -> «01:05:00» / «00:12:30»: видно, как время понято.
+// Маска времени: после каждого ввода переформатируем и ставим курсор после того же числа цифр.
+// Общий обработчик input полей сработал раньше, на неотформатированном значении, — пересчитываем превью.
+function digitsBefore(value, pos) {
+    return value.slice(0, pos).replace(/\D/g, '').length;
+}
+
+function caretAfterDigits(value, count) {
+    if (!count) return 0;
+    let seen = 0;
+    for (let i = 0; i < value.length; i++) {
+        if (/\d/.test(value[i]) && ++seen === count) return i + 1;
+    }
+    return value.length;
+}
+
+mFields.time.addEventListener('input', e => {
+    const el = mFields.time;
+    const caret = el.selectionStart;
+    // Введённое «:» и вставка — с учётом двоеточий («1:5», «1:05:00»); обычный ввод и удаление —
+    // только по цифрам, иначе оставшиеся «:» в середине строки сбивали бы раскладку.
+    if (e.data === ':' || e.inputType === 'insertFromPaste') {
+        el.value = maskDuration(el.value);
+        const pos = Math.min(maskDuration(el.value.slice(0, caret)).length, el.value.length);
+        el.setSelectionRange(pos, pos);
+    } else {
+        const digits = digitsBefore(el.value, caret);
+        el.value = maskDuration(el.value.replace(/\D/g, ''));
+        const pos = caretAfterDigits(el.value, digits);
+        el.setSelectionRange(pos, pos);
+    }
+    updatePreview();
+});
+
+// Backspace сразу после «:» удаляет цифру перед ним, а не упирается в двоеточие.
+mFields.time.addEventListener('keydown', e => {
+    const el = mFields.time;
+    const pos = el.selectionStart;
+    if (e.key !== 'Backspace' || pos !== el.selectionEnd || el.value[pos - 1] !== ':') return;
+    e.preventDefault();
+    const keep = digitsBefore(el.value, pos) - 1; // цифр слева от курсора после удаления
+    el.value = (el.value.slice(0, pos - 2) + el.value.slice(pos)).replace(/:/g, '');
+    el.setSelectionRange(keep, keep);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
+// «1:5» -> «01:05:00»: при уходе из поля видно, как время понято.
 mFields.time.addEventListener('blur', () => {
     const sec = parseDuration(mFields.time.value);
     if (sec) mFields.time.value = formatDuration(sec);
@@ -775,6 +851,7 @@ function renderJobs({ flashMachine, flashJob } = {}) {
     renderMachineOptions();
     markCurrentMachine();
     updatePreview();
+    saveState();
 
     if (flashMachine) {
         const card = jobsContainer.querySelector(`.machine[data-machine="${flashMachine}"]`);
@@ -983,13 +1060,91 @@ function generatePDF() {
 
 printBtn.addEventListener('click', generatePDF);
 
-// Страница не хранит состояние — предупреждаем о потере задания при закрытии/перезагрузке.
-window.addEventListener('beforeunload', e => {
-    if (sortedMachineIds().length) {
-        e.preventDefault();
-        e.returnValue = '';
+// --- СОХРАНЕНИЕ ПРОГРЕССА (localStorage) ---
+// Задание, параметры смены и недописанный ручной ввод переживают перезагрузку и закрытие вкладки.
+// Позиции хранятся снимком значений, а не индексом в data.js: после перепарса индексы меняются.
+// Позиция базы при восстановлении ищется по изделию + имени файла; не нашлась — станет ручной.
+
+const STORAGE_KEY = 'order-service:shift';
+const STORAGE_VERSION = 1;
+
+function itemSnapshot(item, heads) {
+    const hd = headData(item, heads);
+    return {
+        product: item.product,
+        fileName: item.fileName,
+        desc: item.fileDescription,
+        distanceCm: hd.distanceCm,
+        timeSec: hd.timeSec,
+        manual: !!item.manual,
+    };
+}
+
+function findDbItem(product, fileName, heads) {
+    return ITEMS.find(it => it.product === product && it.fileName === fileName && (!heads || headData(it, heads))) || null;
+}
+
+function restoreItem(snap, heads) {
+    return (!snap.manual && findDbItem(snap.product, snap.fileName, heads)) || manualItem(snap, heads);
+}
+
+function saveState() {
+    const state = {
+        v: STORAGE_VERSION,
+        date: shiftDate.value,
+        operator: operatorName.value,
+        machine: currentMachine(),
+        heads: currentHeads(),
+        runs: runsInput.value,
+        jobs: sortedMachineIds().map(mId => ({
+            machine: mId,
+            items: machineJobs[mId].map(job => ({ heads: job.heads, runs: job.runs, item: itemSnapshot(job.item, job.heads) })),
+        })),
+        manual: manualMode ? {
+            base: manualBase && { product: manualBase.product, fileName: manualBase.fileName },
+            dirty: manualDirty,
+            fields: Object.fromEntries(Object.entries(mFields).map(([k, el]) => [k, el.value])),
+        } : null,
+    };
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { /* хранилище недоступно (приватный режим и т.п.) — работаем без сохранения */ }
+}
+
+/** Восстанавливает прогресс; возвращает true, если сохранённое состояние было. */
+function restoreState() {
+    let state;
+    try {
+        state = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    } catch (e) {
+        return false;
     }
-});
+    if (!state || state.v !== STORAGE_VERSION) return false;
+
+    shiftDate.value = state.date || todayIso();
+    operatorName.value = state.operator || '';
+    if (HEAD_OPTIONS.includes(state.heads)) document.querySelector(`input[name="heads"][value="${state.heads}"]`).checked = true;
+    runsInput.value = state.runs || 1;
+    renderMachineOptions();
+    if (state.machine) machineSelect.value = state.machine;
+
+    for (const { machine, items } of state.jobs || []) {
+        machineJobs[machine] = items.map(j => ({ item: restoreItem(j.item, j.heads), heads: j.heads, runs: j.runs }));
+    }
+
+    if (state.manual) {
+        manualMode = true;
+        manualBase = state.manual.base && findDbItem(state.manual.base.product, state.manual.base.fileName);
+        manualDirty = state.manual.dirty;
+        Object.entries(state.manual.fields || {}).forEach(([k, v]) => { if (mFields[k]) mFields[k].value = v; });
+    }
+    return true;
+}
+
+// Поля смены, станок, головы, запуски, правка запусков в таблице, ручной ввод — всё через input/change.
+document.addEventListener('input', saveState);
+document.addEventListener('change', saveState);
+manualBtn.addEventListener('click', saveState);
 
 // --- ДАТА БАЗЫ (report.js пишет parse.js; файла может не быть) ---
 
@@ -1004,6 +1159,8 @@ function renderBaseInfo() {
 // --- ИНИЦИАЛИЗАЦИЯ ---
 
 renderBaseInfo();
-shiftDate.value = todayIso();
+const restored = restoreState();
+if (!restored) shiftDate.value = todayIso();
 renderMachineOptions();
 renderJobs();
+if (restored && sortedMachineIds().length) showToast('Задание восстановлено с прошлого раза');
