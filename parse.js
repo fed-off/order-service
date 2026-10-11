@@ -18,6 +18,7 @@
  * Изделие протягивается по rowspan; пустое имя -> carry-forward.
  * У файла ВСЕГДА есть heads[2] и heads[4]; нет данных -> distanceCm/timeSec = 0.
  * Коллизия (разные distance/time в корзине) -> оставляем ПЕРВОЕ + пишем в отчёт.
+ * Перед записью прежний data.js клонируется рядом (data.<дата>_<время>.js).
  * кол-во повторов не хранится. Подробности: source/README.md.
  */
 
@@ -215,7 +216,46 @@ function parseTime(raw) {
 
 // ---------- основная логика ----------
 
+// ---------- бэкап предыдущего data.js ----------
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// Метка даты/времени запуска для имени бэкапа: YYYY-MM-DD_HH-MM-SS (без ':' — для Windows).
+function backupStamp(d) {
+  return (
+    d.getFullYear() + '-' +
+    pad2(d.getMonth() + 1) + '-' +
+    pad2(d.getDate()) + '_' +
+    pad2(d.getHours()) + '-' +
+    pad2(d.getMinutes()) + '-' +
+    pad2(d.getSeconds())
+  );
+}
+
+// Если OUT уже существует — клонируем его в файл с датой запуска в имени
+// (напр. data.2026-10-11_13-44-05.js) ПЕРЕД тем, как парсер перезапишет data.js.
+// Возвращает путь бэкапа или null (если исходного файла не было).
+function backupExistingOut() {
+  if (!fs.existsSync(OUT)) return null;
+  const dir = path.dirname(OUT);
+  const base = path.basename(OUT, path.extname(OUT));
+  const ext = path.extname(OUT);
+  const stamp = backupStamp(new Date());
+  let backupPath = path.join(dir, base + '.' + stamp + ext);
+  let i = 1;
+  while (fs.existsSync(backupPath)) {
+    backupPath = path.join(dir, base + '.' + stamp + '.' + i + ext);
+    i++;
+  }
+  fs.copyFileSync(OUT, backupPath);
+  return backupPath;
+}
+
 function main() {
+  const backupPath = backupExistingOut();
+  if (backupPath) console.log('Бэкап предыдущего data.js -> ' + backupPath);
   const html = fs.readFileSync(SRC, 'utf8');
   const tbody = extractTbody(html);
   const grid = buildGrid(tbody);
@@ -356,6 +396,7 @@ function main() {
   const L = [];
   L.push('=== ОТЧЁТ ПАРСЕРА source/sheet.html ===');
   L.push('Сгенерировано: ' + new Date().toISOString());
+  L.push('Бэкап предыдущего data.js: ' + (backupPath ? path.basename(backupPath) : 'нет (файл не существовал)'));
   L.push('');
   L.push('-- Определение столбцов --');
   if (colNotes.length === 0) L.push('  все столбцы найдены по заголовкам на ожидаемых индексах.');
@@ -387,6 +428,7 @@ function main() {
   fs.writeFileSync(REPORT, L.join('\n'), 'utf8');
 
   console.log('ГОТОВО -> ' + OUT);
+  if (backupPath) console.log('Бэкап -> ' + backupPath);
   console.log('Отчёт  -> ' + REPORT);
   console.log('Изделий: ' + products.length + ' | файлов: ' + totalFiles);
   console.log('Пропуски: AB ' + stats.skippedNoAB + ' | голова ' + stats.skippedHeads + ' | расст ' + stats.skippedDistance + ' | время ' + stats.skippedTime + ' | изд ' + stats.skippedNoProduct);
