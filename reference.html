@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система формирования сменных заданий лазерной резки</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #2980b9;
+            --bg-color: #f4f6f7;
+            --card-bg: #ffffff;
+            --border-color: #bdc3c7;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1, h2, h3 {
+            color: var(--primary-color);
+            margin-top: 0;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .form-group input, .form-group select {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #1c5980;
+        }
+
+        .btn-success {
+            background-color: #27ae60;
+        }
+        .btn-success:hover {
+            background-color: #1e8449;
+        }
+
+        .btn-danger {
+            background-color: #e74c3c;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        /* Таблица в интерфейсе */
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        table.data-table th, table.data-table td {
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        table.data-table th {
+            background-color: #ecf0f1;
+        }
+
+        .machine-badge {
+            display: inline-block;
+            background: #e8f4f8;
+            color: var(--accent-color);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        /* Поисковый блок */
+        .search-results {
+            border: 1px solid var(--border-color);
+            max-height: 150px;
+            overflow-y: auto;
+            position: absolute;
+            background: white;
+            width: 95%;
+            z-index: 100;
+            display: none;
+        }
+
+        .search-item {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+
+        .search-item:hover {
+            background-color: #f1f1f1;
+        }
+
+        /* БЛОК ДЛЯ ПЕЧАТИ PDF (A4) */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            .page-break {
+                page-break-after: always;
+            }
+        }
+
+        .print-only {
+            display: none;
+        }
+
+        .pdf-header {
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .pdf-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+
+        .pdf-table th, .pdf-table td {
+            border: 1px solid #000;
+            padding: 8px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .pdf-table th {
+            background-color: #f0f0f0;
+        }
+
+        .pdf-manual-cell {
+            width: 120px;
+            background-color: #fafafa;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container no-print">
+    <h1>Генератор сменных заданий для лазерной резки (Фанера / Дерево)</h1>
+
+    <div class="card">
+        <h2>1. Параметры смены</h2>
+        <div class="grid-2">
+            <div class="form-group">
+                <label>ФИО Оператора:</label>
+                <input type="text" id="operatorName" placeholder="Иванов И.И.">
+            </div>
+            <div class="form-group">
+                <label>Дата смены:</label>
+                <input type="date" id="shiftDate">
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>2. Назначение изделий на станок</h2>
+        <div class="grid-3">
+            <div class="form-group">
+                <label>Выберите станок:</label>
+                <select id="machineSelect">
+                    <option value="1">Станок № 1</option>
+                    <option value="2">Станок № 2</option>
+                    <option value="3">Станок № 3</option>
+                    <option value="4">Станок № 4</option>
+                    <option value="5">Станок № 5</option>
+                    <option value="6">Станок № 6</option>
+                    <option value="7">Станок № 7</option>
+                    <option value="8">Станок № 8</option>
+                    <option value="9">Станок № 9</option>
+                    <option value="10">Станок № 10</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="position: relative;">
+                <label>Поиск изделия / файла:</label>
+                <input type="text" id="fileSearch" placeholder="Введите название..." autocomplete="off">
+                <div id="searchResults" class="search-results"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Количество изделий (шт):</label>
+                <input type="number" id="itemQty" value="10" min="1">
+            </div>
+        </div>
+
+        <div id="calcPreview" style="background: #eef7fa; padding: 12px; border-radius: 4px; display: none; margin-bottom: 15px;">
+            <strong>Предварительный расчёт:</strong>
+            <span id="previewText"></span>
+        </div>
+
+        <button class="btn" onclick="addJobToMachine()">Добавить в задание станка</button>
+    </div>
+
+    <div class="card">
+        <h2>3. Сформированное задание по станкам</h2>
+        <div id="jobsContainer">
+            <p style="color: #7f8c8d;">Задания еще не добавлены.</p>
+        </div>
+
+        <div style="margin-top: 20px; text-align: right;">
+            <button class="btn btn-success" onclick="generatePDF()">Скачать / Напечатать Сменное Задание (PDF)</button>
+        </div>
+    </div>
+</div>
+
+<div id="pdfArea" class="print-only">
+    <div class="pdf-header">
+        <h2 style="text-align: center; margin-bottom: 5px;">СМЕННОЕ ЗАДАНИЕ НА ЛАЗЕРНУЮ РЕЗКУ</h2>
+        <table style="width: 100%; font-size: 14px; margin-top: 10px;">
+            <tr>
+                <td><strong>Оператор:</strong> <span id="pdfOperator">-</span></td>
+                <td style="text-align: right;"><strong>Дата:</strong> <span id="pdfDate">-</span></td>
+            </tr>
+        </table>
+    </div>
+
+    <div id="pdfMachinesContent"></div>
+</div>
+
+<script>
+// --- БАЗА ДАННЫХ ФАЙЛОВ ИЗ EXCEL (Таблица раскроев дерева) ---
+const fileDatabase = [
+    { id: 1, name: "1.5_Medal_Belive.rd", description: "Медальница Фанера 'Верь в себя'", headDistance: "180 мм", itemsPerSheet: 4, cutTimeMin: 12, changeMaterialTimeMin: 2 },
+    { id: 2, name: "3_Box_Tea_100x100.rd", description: "Шкатулка для чая (Фанера 3мм)", headDistance: "120 мм", itemsPerSheet: 2, cutTimeMin: 8, changeMaterialTimeMin: 2 },
+    { id: 3, name: "4_Organizer_Desk.rd", description: "Органайзер настольный (Фанера 4мм)", headDistance: "Без смещения", itemsPerSheet: 1, cutTimeMin: 15, changeMaterialTimeMin: 3 },
+    { id: 4, name: "3_Clock_Wood_300.rd", description: "Заготовка часов 300мм", headDistance: "200 мм", itemsPerSheet: 6, cutTimeMin: 18, changeMaterialTimeMin: 2 },
+    { id: 5, name: "6_Topper_Happy.rd", description: "Топпер 'С Днем Рождения'", headDistance: "100 мм", itemsPerSheet: 12, cutTimeMin: 10, changeMaterialTimeMin: 1.5 }
+];
+
+// Хранилище сменного задания: { machineId: [ { file, qty, runs, totalTime } ] }
+let machineJobs = {}; 
+let selectedFile = null;
+
+// Инициализация даты
+document.getElementById('shiftDate').valueAsDate = new Date();
+
+// --- МАТЕМАТИЧЕСКИЕ ФУНКЦИИ (ФОРМУЛЫ ИЗ EXCEL) ---
+
+/**
+ * Расчет количества запусков файла на станке
+ * Excel Formula: ROUNDUP(ReqQty / ItemsPerSheet)
+ */
+function calculateRuns(reqQty, itemsPerSheet) {
+    return Math.ceil(reqQty / itemsPerSheet);
+}
+
+/**
+ * Расчет общего времени на изготовление партии одного файла (в минутах)
+ * Excel Formula: Runs * (CutTimePerSheet + ChangeMaterialTime)
+ */
+function calculateFileTotalTime(runs, cutTimePerSheet, changeMaterialTime) {
+    return runs * (cutTimePerSheet + changeMaterialTime);
+}
+
+/**
+ * Форматирование времени из минут в часы и минуты
+ */
+function formatTime(minutes) {
+    const hrs = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    if (hrs > 0) {
+        return `${hrs} ч ${mins} мин`;
+    }
+    return `${mins} мин`;
+}
+
+// --- ИНТЕРФЕЙС И ПОИСК ---
+
+const searchInput = document.getElementById('fileSearch');
+const searchResults = document.getElementById('searchResults');
+const itemQtyInput = document.getElementById('itemQty');
+
+searchInput.addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    searchResults.innerHTML = '';
+    
+    if (!query) {
+        searchResults.style.display = 'none';
+        return;
+    }
+
+    const filtered = fileDatabase.filter(f => 
+        f.name.toLowerCase().includes(query) || 
+        f.description.toLowerCase().includes(query)
+    );
+
+    if (filtered.length > 0) {
+        filtered.forEach(file => {
+            const div = document.createElement('div');
+            div.className = 'search-item';
+            div.innerText = `${file.description} (${file.name})`;
+            div.onclick = () => selectFile(file);
+            searchResults.appendChild(div);
+        });
+        searchResults.style.display = 'block';
+    } else {
+        searchResults.style.display = 'none';
+    }
+});
+
+function selectFile(file) {
+    selectedFile = file;
+    searchInput.value = `${file.description} (${file.name})`;
+    searchResults.style.display = 'none';
+    updatePreview();
+}
+
+itemQtyInput.addEventListener('input', updatePreview);
+
+function updatePreview() {
+    if (!selectedFile) return;
+
+    const qty = parseInt(itemQtyInput.value) || 0;
+    if (qty <= 0) return;
+
+    const runs = calculateRuns(qty, selectedFile.itemsPerSheet);
+    const totalMin = calculateFileTotalTime(runs, selectedFile.cutTimeMin, selectedFile.changeMaterialTimeMin);
+
+    const preview = document.getElementById('calcPreview');
+    const previewText = document.getElementById('previewText');
+    
+    preview.style.display = 'block';
+    previewText.innerHTML = `Необходимо <strong>${runs} запусков</strong> файла на станке. Расчётное время выполнения: <strong>${formatTime(totalMin)}</strong> (включая смену материала).`;
+}
+
+// Добавление файла в станок
+function addJobToMachine() {
+    if (!selectedFile) {
+        alert('Пожалуйста, выберите файл/изделие из списка!');
+        return;
+    }
+
+    const machineId = document.getElementById('machineSelect').value;
+    const qty = parseInt(itemQtyInput.value) || 0;
+
+    if (qty <= 0) {
+        alert('Укажите корректное количество изделий!');
+        return;
+    }
+
+    const runs = calculateRuns(qty, selectedFile.itemsPerSheet);
+    const totalTimeMin = calculateFileTotalTime(runs, selectedFile.cutTimeMin, selectedFile.changeMaterialTimeMin);
+
+    if (!machineJobs[machineId]) {
+        machineJobs[machineId] = [];
+    }
+
+    machineJobs[machineId].push({
+        file: selectedFile,
+        qty: qty,
+        runs: runs,
+        totalTimeMin: totalTimeMin
+    });
+
+    // Сброс выбора
+    selectedFile = null;
+    searchInput.value = '';
+    document.getElementById('calcPreview').style.display = 'none';
+
+    renderJobs();
+}
+
+// Отрисовка списка заданий в интерфейсе
+function renderJobs() {
+    const container = document.getElementById('jobsContainer');
+    container.innerHTML = '';
+
+    const machineKeys = Object.keys(machineJobs).sort((a,b) => a - b);
+
+    if (machineKeys.length === 0) {
+        container.innerHTML = '<p style="color: #7f8c8d;">Задания еще не добавлены.</p>';
+        return;
+    }
+
+    machineKeys.forEach(mId => {
+        const jobs = machineJobs[mId];
+        
+        // Вычисляем общее время занятости станка (СУММА времени всех файлов)
+        const totalMachineTimeMin = jobs.reduce((sum, j) => sum + j.totalTimeMin, 0);
+
+        const card = document.createElement('div');
+        card.style.border = '1px solid #dcdde1';
+        card.style.borderRadius = '6px';
+        card.style.padding = '15px';
+        card.style.marginBottom = '15px';
+
+        let html = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span class="machine-badge">СТАНОК № ${mId}</span>
+                <strong style="color: #27ae60;">Общее время занятости станка: ${formatTime(totalMachineTimeMin)}</strong>
+            </div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Описание изделия</th>
+                        <th>Имя файла</th>
+                        <th>Расстояние между головами</th>
+                        <th>Кол-во изделий</th>
+                        <th>Кол-во запусков</th>
+                        <th>Время на файл</th>
+                        <th>Действие</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        jobs.forEach((job, index) => {
+            html += `
+                <tr>
+                    <td>${job.file.description}</td>
+                    <td><code>${job.file.name}</code></td>
+                    <td>${job.file.headDistance}</td>
+                    <td>${job.qty} шт</td>
+                    <td><strong>${job.runs}</strong></td>
+                    <td>${formatTime(job.totalTimeMin)}</td>
+                    <td><button class="btn btn-danger" onclick="removeJob(${mId}, ${index})">Удалить</button></td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table>`;
+        card.innerHTML = html;
+        container.appendChild(card);
+    });
+}
+
+function removeJob(machineId, index) {
+    machineJobs[machineId].splice(index, 1);
+    if (machineJobs[machineId].length === 0) {
+        delete machineJobs[machineId];
+    }
+    renderJobs();
+}
+
+// --- ПОДГОТОВКА И ПЕЧАТЬ PDF ---
+
+function generatePDF() {
+    const operator = document.getElementById('operatorName').value || 'Не указан';
+    const date = document.getElementById('shiftDate').value || '-';
+
+    document.getElementById('pdfOperator').innerText = operator;
+    document.getElementById('pdfDate').innerText = date;
+
+    const pdfContent = document.getElementById('pdfMachinesContent');
+    pdfContent.innerHTML = '';
+
+    const machineKeys = Object.keys(machineJobs).sort((a,b) => a - b);
+
+    if (machineKeys.length === 0) {
+        alert('Нет данных для печати! Сначала добавьте хотя бы одно задание.');
+        return;
+    }
+
+    machineKeys.forEach(mId => {
+        const jobs = machineJobs[mId];
+        const totalMachineTimeMin = jobs.reduce((sum, j) => sum + j.totalTimeMin, 0);
+
+        const block = document.createElement('div');
+        block.style.marginBottom = '25px';
+
+        let tableHtml = `
+            <div style="background: #e0e0e0; padding: 6px 10px; font-weight: bold; font-size: 14px; border: 1px solid #000; display: flex; justify-content: space-between;">
+                <span>СТАНОК № ${mId}</span>
+                <span>ОБЩЕЕ ВРЕМЯ ЗАНЯТОСТИ СТАНКА: ${formatTime(totalMachineTimeMin)}</span>
+            </div>
+            <table class="pdf-table">
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">Описание изделия</th>
+                        <th style="width: 20%;">Имя файла</th>
+                        <th style="width: 15%;">Расстояние между головами</th>
+                        <th style="width: 10%;">Кол-во запусков</th>
+                        <th class="pdf-manual-cell">Запусков на начало смены (заполняет оператор)</th>
+                        <th class="pdf-manual-cell">Запусков на конец смены (заполняет оператор)</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        jobs.forEach(job => {
+            tableHtml += `
+                <tr>
+                    <td style="text-align: left;">${job.file.description}</td>
+                    <td><code>${job.file.name}</code></td>
+                    <td>${job.file.headDistance}</td>
+                    <td><strong>${job.runs}</strong></td>
+                    <td class="pdf-manual-cell"></td>
+                    <td class="pdf-manual-cell"></td>
+                </tr>
+            `;
+        });
+
+        tableHtml += `</tbody></table>`;
+        block.innerHTML = tableHtml;
+        pdfContent.appendChild(block);
+    });
+
+    // Вызов диалога печати браузера (с возможностью сохранения в PDF)
+    window.print();
+}
+</script>
+</body>
+</html>
