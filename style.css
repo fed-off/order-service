@@ -39,6 +39,51 @@ body {
 
 .app > * { min-width: 0; }
 
+/* ---------- Верхняя строка ---------- */
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    flex-wrap: wrap;
+    padding: 2px 2px 0;
+}
+
+.topbar h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.topbar-link {
+    display: flex;
+    align-items: center;
+    gap: 6px 14px;
+    flex-wrap: wrap;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--ink-2);
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.topbar-link:hover { border-color: var(--accent); }
+
+.topbar-meta {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.topbar-meta:empty { display: none; }
+.topbar-meta b { font-family: var(--mono); color: var(--ink); }
+.topbar-warn { color: var(--warn); font-weight: 600; }
+.topbar-go { color: var(--accent); font-weight: 600; }
+
 /* ---------- Панели ---------- */
 
 .panel {
@@ -67,12 +112,6 @@ body {
     letter-spacing: .04em;
     text-transform: uppercase;
     color: var(--ink);
-}
-
-.step {
-    font-family: var(--mono);
-    color: var(--accent);
-    margin-right: 8px;
 }
 
 .hint {
@@ -375,7 +414,11 @@ mark {
 }
 
 .preview-title {
-    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 8px 4px 12px;
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
@@ -465,6 +508,90 @@ mark {
     font-weight: 600;
     text-decoration: underline;
     cursor: pointer;
+}
+
+/* ---------- Ручной ввод в превью ---------- */
+
+.btn-mini {
+    height: 24px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--accent);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    cursor: pointer;
+}
+
+.btn-mini:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+.m-input { display: none; }
+
+.preview[data-mode="manual"] {
+    border-style: solid;
+    border-color: var(--accent);
+    background: #fff;
+}
+
+.preview[data-mode="manual"] .preview-title { color: var(--accent); }
+.preview[data-mode="manual"] .out > output:not(#pvRuns):not(#pvTimeTotal) { display: none; }
+.preview[data-mode="manual"] .m-input { display: block; }
+.preview[data-mode="manual"] .m-unit { display: flex; }
+
+.out input.m-input,
+.m-unit input {
+    height: 30px;
+    padding: 0 8px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.out .m-desc {
+    margin-top: 4px;
+    font-weight: 400;
+    font-size: 13px;
+}
+
+.out .m-file { font-family: var(--mono); }
+
+/* Поле с единицей измерения справа: «75,5 | см» */
+.m-unit { position: relative; }
+.m-unit input { padding-right: 34px; }
+.m-unit::after {
+    content: attr(data-unit);
+    position: absolute;
+    right: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--muted);
+    pointer-events: none;
+}
+
+.out .is-invalid,
+.m-unit.is-invalid input {
+    border-color: var(--danger);
+    background: #fdf0ee;
+}
+
+.badge-manual {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 5px;
+    border: 1px solid #f0cf9c;
+    border-radius: 3px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    vertical-align: 2px;
 }
 
 /* ---------- Кнопки ---------- */
@@ -647,6 +774,233 @@ table.data-table {
     color: #9cc9f0;
 }
 
+/* ---------- Страница report.html ---------- */
+
+.col-badge {
+    display: inline-block;
+    min-width: 26px;
+    padding: 1px 5px;
+    border: 1px solid #b8d3ea;
+    border-radius: 3px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: 0;
+}
+
+.guide-table { min-width: 980px; }
+.guide-table td { vertical-align: top; }
+.guide-table .g-col { width: 76px; }
+.guide-table .g-name { width: 180px; color: var(--ink-2); font-size: 13px; }
+.guide-table .g-req { width: 110px; }
+.guide-table .g-ex { width: 170px; }
+.guide-table .g-res { width: 200px; font-size: 13px; color: var(--ink-2); }
+.guide-table .g-res-bad { color: var(--danger); }
+
+.req {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted);
+}
+
+.req-on { color: var(--ink); }
+
+.chip {
+    display: inline-block;
+    margin: 0 2px 3px 0;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
+}
+
+.chip-ok { background: var(--success-soft); color: var(--success); border: 1px solid #b7dcc6; }
+.chip-bad { background: #fdf0ee; color: var(--danger); border: 1px solid #efc2bc; }
+.chip-empty { font-family: var(--sans); font-style: italic; }
+
+.sample {
+    margin-top: 14px;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    background: #fafbfc;
+}
+
+.sample-title {
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+    border-bottom: 1px dashed var(--line-2);
+}
+
+.sample .table-wrap { padding: 12px; }
+
+/* Мини-таблица в стиле Google Таблиц */
+table.sheet {
+    border-collapse: collapse;
+    font-size: 13px;
+    background: #fff;
+}
+
+.sheet th,
+.sheet td {
+    border: 1px solid #c8ccd0;
+    padding: 4px 8px;
+    white-space: nowrap;
+}
+
+.sheet thead th,
+.sheet .sh-row {
+    background: #f1f3f4;
+    color: #5f6368;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.sheet .sh-row { width: 36px; }
+.sheet .sh-titles td { background: #f8f9fa; color: var(--ink-2); font-size: 11px; font-weight: 600; }
+.sheet .sh-gap { width: 26px; padding: 0; background: repeating-linear-gradient(135deg, #fff 0 4px, #eef0f2 4px 8px); color: var(--muted); text-align: center; }
+.sheet .sh-merged { vertical-align: middle; white-space: normal; max-width: 200px; }
+.sheet .sh-file { font-family: var(--mono); font-weight: 600; }
+
+.updated { margin-bottom: 12px; color: var(--ink-2); }
+.updated b { font-family: var(--mono); color: var(--ink); }
+
+.tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
+}
+
+.tile {
+    padding: 10px 12px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius);
+    background: #fafbfc;
+}
+
+.tile-value {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--ink);
+}
+
+.tile-label { margin-top: 2px; font-size: 12px; color: var(--ink-2); }
+.tile-note { margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+.warn-text { color: var(--warn); }
+
+.stats-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.stats-cols h3,
+.sub-head {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--ink-2);
+}
+
+.sub-head { margin-top: 18px; }
+.stats-cols p { margin: 0 0 8px; }
+.muted { color: var(--muted); }
+
+.chips-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 8px;
+    padding: 0;
+    list-style: none;
+}
+
+.chips-list li {
+    padding: 2px 8px;
+    border: 1px solid #f0cf9c;
+    border-radius: 3px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    font-size: 13px;
+}
+
+.change { margin-bottom: 8px; }
+.change-title { font-size: 13px; color: var(--ink-2); }
+.change ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
+
+.legend-inline {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--ink-2);
+}
+
+.legend-inline span { display: inline-flex; align-items: center; gap: 5px; }
+
+.sw {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+}
+
+.sw-empty { background: var(--warn-soft); border: 1px solid #e0a650; }
+.sw-bad { background: #fdf0ee; border: 1px solid var(--danger); }
+
+.block-note { margin: 0 0 10px; font-size: 13px; color: var(--ink-2); }
+
+table.report-table { min-width: 1180px; }
+.report-table td { vertical-align: top; font-size: 13px; }
+.report-table th { white-space: normal; }
+.report-table .x-row { width: 76px; font-family: var(--mono); color: var(--ink-2); }
+.report-table .x-product { width: 15%; }
+.report-table .x-parts { width: 11%; }
+.report-table .x-fileName { width: 110px; }
+.report-table .x-machine { width: 70px; }
+.report-table .x-distance { width: 90px; }
+.report-table .x-heads { width: 66px; }
+.report-table .x-abTime,
+.report-table .x-time { width: 92px; font-family: var(--mono); }
+.report-table .x-fix { width: 26%; }
+.report-table .x-count { width: 80px; }
+.report-table .x-fix ul { margin: 0; padding: 0; list-style: none; }
+.report-table .x-fix li + li { margin-top: 4px; }
+.attention-table { min-width: 760px; }
+.report-table .sep { color: var(--muted); }
+
+.cell-empty,
+.cell-bad { font-weight: 600; }
+
+.cell-empty {
+    background: var(--warn-soft);
+    box-shadow: inset 0 0 0 1px #e0a650;
+    color: var(--warn);
+    font-style: italic;
+}
+
+.cell-bad {
+    background: #fdf0ee;
+    box-shadow: inset 0 0 0 1px var(--danger);
+    color: var(--danger);
+}
+
+.ok-state { color: var(--success); border-color: #b7dcc6; background: var(--success-soft); }
+
 /* ---------- Адаптив ---------- */
 
 @media (max-width: 1100px) {
@@ -659,6 +1013,7 @@ table.data-table {
 
 @media (max-width: 640px) {
     body { padding: 8px; }
+    .stats-cols { grid-template-columns: 1fr; }
     .row-shift,
     .row-assign { grid-template-columns: 1fr 1fr; }
     .field-operator, .field-search { grid-column: 1 / -1; }
@@ -674,7 +1029,7 @@ table.data-table {
 @page {
     size: A4;
     /* Нулевые поля страницы — браузер не печатает колонтитулы (путь к файлу, дату, заголовок).
-       Поля задаются вручную: сверху/снизу — thead/tfoot .print-frame, по бокам — padding. */
+       Поля и номер страницы задаёт сама .pdf-page (страницы собирает app.js). */
     margin: 0;
 }
 
@@ -691,22 +1046,47 @@ table.data-table {
     .print-only { display: block !important; }
 }
 
-#pdfArea {
+
+/* Размеры .pdf-page синхронны с PDF_BODY_PX в app.js: 296 мм высоты (не 297 — без пустых
+   страниц от округления), поле сверху 12 мм, номер страницы в нижних 18 мм. */
+.pdf-sheet {
     font-family: var(--sans);
     color: #000;
-    padding: 0 14mm;
 }
 
-.print-frame {
-    width: 100%;
-    border-collapse: collapse;
+.pdf-page {
+    position: relative;
+    width: 210mm;
+    height: 296mm;
+    padding: 12mm 14mm 0;
+    overflow: hidden;
+    break-after: page;
 }
 
-.print-frame > thead > tr > td,
-.print-frame > tfoot > tr > td,
-.print-frame > tbody > tr > td { padding: 0; }
+.pdf-page:last-child { break-after: auto; }
 
-.print-gap { height: 12mm; }
+/* Невидимая копия для замера высот строк перед разбивкой на страницы */
+.pdf-measure {
+    position: absolute;
+    top: 0;
+    left: -10000px;
+    visibility: hidden;
+}
+
+.pdf-measure .pdf-page { height: auto; }
+
+.pdf-footer {
+    position: absolute;
+    left: 14mm;
+    right: 14mm;
+    bottom: 9mm;
+    display: flex;
+    justify-content: space-between;
+    padding-top: 4px;
+    border-top: 1px solid #999;
+    font-size: 10px;
+    color: #333;
+}
 
 .pdf-header {
     border-bottom: 2px solid #000;
@@ -726,21 +1106,11 @@ table.data-table {
     font-size: 14px;
 }
 
-.pdf-machine { margin-bottom: 22px; }
-
 .pdf-table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
 }
-
-.pdf-table th.pdf-machine-bar {
-    padding: 6px 10px;
-    background: #e0e0e0;
-    font-size: 13px;
-    text-align: left;
-}
-
-.pdf-machine-bar span + span { float: right; }
 
 .pdf-table th,
 .pdf-table td {
@@ -751,7 +1121,27 @@ table.data-table {
     vertical-align: middle;
 }
 
-.pdf-table th { background: #f0f0f0; }
+.pdf-table .pdf-left { text-align: left; }
+
+.pdf-legend th { background: #f0f0f0; }
+
+.pdf-bar td {
+    padding: 6px 10px;
+    background: #e0e0e0;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+}
+
+.pdf-bar span + span { float: right; }
+
+/* Отступ между станками внутри общей таблицы */
+.pdf-gap td {
+    height: 5mm;
+    padding: 0;
+    border-left-color: transparent;
+    border-right-color: transparent;
+}
 
 .pdf-table tr {
     break-inside: avoid;
@@ -762,7 +1152,4 @@ table.data-table {
 .pdf-table .file-name { font-size: 12px; }
 .pdf-table .file-desc { font-size: 10px; color: #333; }
 
-.pdf-manual-cell {
-    width: 110px;
-    background: #fafafa;
-}
+.pdf-manual-cell { background: #fafafa; }

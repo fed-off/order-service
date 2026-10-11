@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /*
- * parse.js — парсер source/sheet.html -> data.js + source/parse-report.txt
+ * parse.js — парсер source/sheet.html -> data.js + report.js + source/parse-report.txt
  * Node.js, без внешних зависимостей.
+ * report.js — для страницы report.html: строки с файлом, не попавшие в базу
+ * (с проблемными столбцами), «попало, но проверьте», статистика и изменения базы.
  *
  * СТОЛБЦЫ (ищутся по имени заголовка, фолбэк на известный индекс):
  *   Изделие -> product (обяз. непустая строка)
@@ -14,7 +16,9 @@
  *   Итого время на файл (AD) -> timeSec (обяз.; берём если AB прошёл гейт)
  *
  * СТРОКА-ДАННЫХ = непустое Название файла И числовой номер станка
- * (отсекает легенду, заголовки, пояснение и пустые Итого).
+ * (отсекает легенду, заголовки, пояснение и пустые Итого). Файл без числового
+ * номера станка ПОСЛЕ первой строки-данных — пропуск с записью в отчёт.
+ * Проблемы строки собираются все сразу (для отчёта), счётчик — по первой.
  * Изделие протягивается по rowspan; пустое имя -> carry-forward.
  * У файла ВСЕГДА есть heads[2] и heads[4]; нет данных -> distanceCm/timeSec = 0.
  * Коллизия (разные distance/time в корзине) -> оставляем ПЕРВОЕ + пишем в отчёт.
@@ -28,6 +32,7 @@ const path = require('path');
 const SRC = path.join(__dirname, 'source', 'sheet.html');
 const OUT = path.join(__dirname, 'data.js');
 const REPORT = path.join(__dirname, 'source', 'parse-report.txt');
+const REPORT_JS = path.join(__dirname, 'report.js');
 
 const DEFAULT_IDX = {
   product: 0,
@@ -76,11 +81,16 @@ function extractTbody(html) {
   return m[1];
 }
 
+// Строка <tbody> -> { html, sheetRow }. sheetRow — номер строки, как его видит
+// мастер в Google Таблице (заголовок строки <th>); нет заголовка -> порядковый номер.
 function extractRows(tbodyHtml) {
   const rows = [];
   const re = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let m;
-  while ((m = re.exec(tbodyHtml)) !== null) rows.push(m[1]);
+  while ((m = re.exec(tbodyHtml)) !== null) {
+    const num = m[1].match(/class="row-header-wrapper"[^>]*>\s*(\d+)\s*</i);
+    rows.push({ html: m[1], sheetRow: num ? parseInt(num[1], 10) : rows.length + 1 });
+  }
   return rows;
 }
 
@@ -105,9 +115,10 @@ function extractCells(rowHtml) {
 function buildGrid(tbodyHtml) {
   const rows = extractRows(tbodyHtml);
   const grid = [];
+  const sheetRows = rows.map((row) => row.sheetRow);
   const occupied = Object.create(null);
   for (let r = 0; r < rows.length; r++) {
-    const cells = extractCells(rows[r]);
+    const cells = extractCells(rows[r].html);
     const rowArr = [];
     let c = 0;
     for (const cell of cells) {
@@ -131,11 +142,24 @@ function buildGrid(tbodyHtml) {
     }
     grid.push(rowArr);
   }
-  return grid;
+  return { grid: grid, sheetRows: sheetRows };
+}
+
+// Индекс столбца (с 0) -> буква, как в Google Таблице: 0 -> A, 27 -> AB.
+function colLetter(idx) {
+  let s = '';
+  let n = idx + 1;
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
 }
 
 function detectColumns(grid) {
   const found = {};
+  const headers = {};
   const notes = [];
   const limit = Math.min(grid.length, 12);
   for (const key of Object.keys(HEADER_NAMES)) {
@@ -147,6 +171,7 @@ function detectColumns(grid) {
         if (!cell) continue;
         if (HEADER_NAMES[key].some((name) => cell.indexOf(name) !== -1)) {
           idx = c;
+          headers[key] = cell;
           break;
         }
       }
@@ -162,7 +187,7 @@ function detectColumns(grid) {
       found[key] = idx;
     }
   }
-  return { found: found, notes: notes };
+  return { found: found, headers: headers, notes: notes };
 }
 
 // ---------- нормализация значений ----------
@@ -214,8 +239,6 @@ function parseTime(raw) {
   return null;
 }
 
-// ---------- основная логика ----------
-
 // ---------- бэкап предыдущего data.js ----------
 
 function pad2(n) {
@@ -253,12 +276,84 @@ function backupExistingOut() {
   return backupPath;
 }
 
+// Секунды -> ч:мм:сс (для текстов отчёта).
+function formatHms(sec) {
+  return Math.floor(sec / 3600) + ':' + pad2(Math.floor(sec % 3600 / 60)) + ':' + pad2(Math.round(sec % 60));
+}
+
+// ---------- отчёт для мастера (report.js) ----------
+
+// Прежняя база (до перезаписи) — для блока «изменения с прошлого обновления».
+function loadPreviousData() {
+  if (!fs.existsSync(OUT)) return null;
+  try {
+    const sandbox = {};
+    new Function('module', fs.readFileSync(OUT, 'utf8') + '\nmodule.exports = DATA;')(sandbox);
+    return Array.isArray(sandbox.exports) ? sandbox.exports : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function fileKey(product, fileName) {
+  return product + '\u0000' + fileName;
+}
+
+function diffData(prev, next) {
+  if (!prev) return null;
+  const index = (data) => {
+    const m = new Map();
+    for (const p of data) for (const f of p.files) m.set(fileKey(p.product, f.fileName), { product: p.product, fileName: f.fileName, heads: f.heads });
+    return m;
+  };
+  const a = index(prev);
+  const b = index(next);
+  const prevProducts = new Set(prev.map((p) => p.product));
+  const nextProducts = new Set(next.map((p) => p.product));
+  const pick = (f) => ({ product: f.product, fileName: f.fileName });
+  const changedFiles = [];
+  for (const [k, f] of b) {
+    const old = a.get(k);
+    if (old && JSON.stringify(old.heads) !== JSON.stringify(f.heads)) changedFiles.push(pick(f));
+  }
+  return {
+    addedProducts: [...nextProducts].filter((p) => !prevProducts.has(p)),
+    removedProducts: [...prevProducts].filter((p) => !nextProducts.has(p)),
+    addedFiles: [...b.keys()].filter((k) => !a.has(k)).map((k) => pick(b.get(k))),
+    removedFiles: [...a.keys()].filter((k) => !b.has(k)).map((k) => pick(a.get(k))),
+    changedFiles: changedFiles,
+  };
+}
+
+// Одинаковые строки (тот же файл и те же значения, разные станки) схлопываем в одну запись.
+function groupRows(list) {
+  const groups = new Map();
+  for (const item of list) {
+    const { sheetRow, values, ...rest } = item;
+    const { machine, ...sameValues } = values;
+    const key = JSON.stringify([rest, sameValues]);
+    let g = groups.get(key);
+    if (!g) {
+      g = Object.assign({ sheetRows: [], values: Object.assign({}, sameValues, { machine: [] }) }, rest);
+      groups.set(key, g);
+    }
+    g.sheetRows.push(sheetRow);
+    if (machine && g.values.machine.indexOf(machine) === -1) g.values.machine.push(machine);
+  }
+  return [...groups.values()].map((g) => Object.assign(g, { values: Object.assign(g.values, { machine: g.values.machine.join(', ') }) }));
+}
+
+// ---------- основная логика ----------
+
 function main() {
+  const prevData = loadPreviousData();
   const backupPath = backupExistingOut();
   if (backupPath) console.log('Бэкап предыдущего data.js -> ' + backupPath);
   const html = fs.readFileSync(SRC, 'utf8');
   const tbody = extractTbody(html);
-  const grid = buildGrid(tbody);
+  const built = buildGrid(tbody);
+  const grid = built.grid;
+  const sheetRows = built.sheetRows;
   const detected = detectColumns(grid);
   const IDX = detected.found;
   const colNotes = detected.notes;
@@ -269,66 +364,122 @@ function main() {
   const stats = {
     rows: grid.length,
     dataRows: 0,
+    skippedMachine: 0,
     skippedNoAB: 0,
     skippedDistance: 0,
     skippedTime: 0,
     skippedHeads: 0,
     skippedNoProduct: 0,
+    skippedCollision: 0,
   };
+
+  // Для report.js: исключённые строки и «попало в базу, но проверьте».
+  const excluded = [];
+  const attention = [];
+  const productsInSheet = new Set();
 
   const products = [];
   let currentProductName = null;
   let currentProduct = null;
+  let seenDataRow = false;
 
   for (let r = 0; r < grid.length; r++) {
     const row = grid[r];
     const fileName = textOrNull(row[IDX.fileName]);
+    if (!fileName) continue;
     const machine = parseMachine(row[IDX.machine]);
+    const productName = textOrNull(row[IDX.product]);
+    const sheetRow = sheetRows[r];
+    const ctx = 'стр. ' + sheetRow + ' | ' + fileName;
+    const raw = (key) => textOrNull(row[IDX[key]]) || '';
+    const values = () => ({
+      product: productName || currentProductName || '',
+      parts: raw('parts'),
+      fileName: fileName,
+      machine: raw('machine'),
+      distance: raw('distance'),
+      heads: raw('heads'),
+      abTime: raw('abTime'),
+      time: raw('time'),
+    });
+    // kind: empty — не заполнено (в т.ч. время 0:00:00 от формулы), bad — заполнено неверно.
+    const exclude = (issues) => excluded.push({
+      sheetRow: sheetRow,
+      values: values(),
+      issues: issues.map((i) => Object.assign({ kind: raw(i.field) ? 'bad' : 'empty' }, i)),
+    });
 
-    if (!fileName || machine == null) continue;
+    // До первой строки-данных файл без номера станка — это шапка/пояснения таблицы.
+    if (machine == null) {
+      if (!seenDataRow) continue;
+      if (productName) currentProductName = productName;
+      stats.skippedMachine++;
+      exclude([{ field: 'machine', msg: raw('machine') ? 'номер станка должен быть числом' : 'не указан номер станка' }]);
+      warnings.push('номер станка не число (' + row[IDX.machine] + ') — пропуск. ' + ctx);
+      continue;
+    }
+    seenDataRow = true;
     stats.dataRows++;
 
-    const ctx = 'gridRow ' + r + ' | ' + fileName;
-
-    const productName = textOrNull(row[IDX.product]);
     if (productName) currentProductName = productName;
+    if (currentProductName) productsInSheet.add(currentProductName);
+
+    // Собираем ВСЕ проблемы строки, чтобы мастер исправил их за один раз.
+    const issues = [];
 
     const abSec = parseTime(row[IDX.abTime]);
-    if (abSec == null || abSec === 0) {
-      stats.skippedNoAB++;
-      continue;
+    const abOk = abSec != null && abSec > 0;
+    if (!abOk) {
+      issues.push(abSec == null && raw('abTime')
+        ? { field: 'abTime', msg: 'время резки не распознано — нужен формат ч:мм:сс' }
+        : { field: 'abTime', msg: 'не заполнено время резки', kind: 'empty' });
     }
 
     const heads = parseHeads(row[IDX.heads]);
-    if (heads == null || VALID_HEADS.indexOf(heads) === -1) {
-      stats.skippedHeads++;
-      warnings.push('количество голов не 2/4 (' + row[IDX.heads] + ') — пропуск. ' + ctx);
-      continue;
-    }
+    const headsOk = heads != null && VALID_HEADS.indexOf(heads) !== -1;
+    if (!headsOk) issues.push({ field: 'heads', msg: raw('heads') ? 'количество голов должно быть 2 или 4' : 'не указано количество голов' });
 
     const distRes = parseDistance(row[IDX.distance]);
     if (!distRes.ok) {
-      stats.skippedDistance++;
-      warnings.push('расстояние-брак [' + distRes.reason + '] (' + row[IDX.distance] + ') — пропуск. ' + ctx);
-      continue;
+      const distMsg = {
+        empty: 'не указано расстояние',
+        spaces: 'пробел внутри числа — уберите пробелы (формат: 75,5)',
+        chars: 'лишние символы — нужно только число, например 75,5',
+        nan: 'расстояние не распознано',
+      };
+      issues.push({ field: 'distance', msg: distMsg[distRes.reason] });
     }
-    const distance = distRes.value;
 
     const timeSec = parseTime(row[IDX.time]);
-    if (timeSec == null || timeSec === 0) {
-      stats.skippedTime++;
-      warnings.push('AD время пусто/0/нераспознано (' + row[IDX.time] + ') при AB>0 — пропуск. ' + ctx);
+    if (abOk && (timeSec == null || timeSec === 0)) {
+      issues.push(timeSec == null && raw('time')
+        ? { field: 'time', msg: 'итоговое время не распознано — нужен формат ч:мм:сс' }
+        : { field: 'time', msg: 'не заполнено итоговое время', kind: 'empty' });
+    }
+
+    if (!currentProductName) issues.push({ field: 'product', msg: 'не указано изделие' });
+
+    if (issues.length) {
+      exclude(issues);
+      const first = issues[0].field;
+      if (first === 'abTime') { stats.skippedNoAB++; continue; }
+      if (first === 'heads') stats.skippedHeads++;
+      else if (first === 'distance') stats.skippedDistance++;
+      else if (first === 'time') stats.skippedTime++;
+      else stats.skippedNoProduct++;
+      warnings.push(issues.map((i) => i.msg + ' [' + colLetter(IDX[i.field]) + ': ' + (row[IDX[i.field]] || '') + ']').join('; ') + ' — пропуск. ' + ctx);
       continue;
     }
+
+    const distance = distRes.value;
 
     if (distance > 1000) {
       warnings.push('подозрительно большое расстояние ' + distance + ' см — проверьте источник. ' + ctx);
+      attention.push({ sheetRow: sheetRow, values: values(), field: 'distance', msg: 'подозрительно большое расстояние: ' + distance + ' см' });
     }
 
-    if (!currentProductName) {
-      stats.skippedNoProduct++;
-      warnings.push('нет изделия (пусто и нет предыдущего) — пропуск. ' + ctx);
-      continue;
+    if (/^итого/i.test(currentProductName)) {
+      attention.push({ sheetRow: sheetRow, values: values(), field: 'product', msg: 'файл стоит в строке «Итого» — в базе он попал в отдельное изделие с этим названием' });
     }
 
     if (!currentProduct || currentProduct.product !== currentProductName) {
@@ -342,7 +493,7 @@ function main() {
 
     let file = currentProduct.files.find((f) => f.fileName === fileName);
     if (!file) {
-      file = { fileName: fileName, fileDescription: null, headsMap: {} };
+      file = { fileName: fileName, fileDescription: null, headsMap: {}, descRow: null };
       currentProduct.files.push(file);
     }
 
@@ -350,18 +501,25 @@ function main() {
     if (descRaw) {
       if (file.fileDescription == null) {
         file.fileDescription = descRaw;
+        file.descRow = sheetRow;
       } else if (file.fileDescription !== descRaw) {
         infos.push('разное описание у ' + fileName + ': оставлено ' + file.fileDescription + ', проигнорировано ' + descRaw + '. ' + ctx);
+        attention.push({ sheetRow: sheetRow, values: values(), field: 'parts', msg: 'другое описание, чем в стр. ' + file.descRow + ' («' + file.fileDescription + '») — в базе оставлено первое' });
       }
     }
 
     const key = String(heads);
     if (file.headsMap[key] == null) {
-      file.headsMap[key] = { distanceCm: distance, timeSec: timeSec };
+      file.headsMap[key] = { distanceCm: distance, timeSec: timeSec, sheetRow: sheetRow };
     } else {
       const ex = file.headsMap[key];
       if (ex.distanceCm !== distance || ex.timeSec !== timeSec) {
+        stats.skippedCollision++;
         collisions.push('коллизия ' + fileName + ' heads=' + key + ': оставлено d=' + ex.distanceCm + ' t=' + ex.timeSec + ', проигнорировано d=' + distance + ' t=' + timeSec + '. ' + ctx);
+        const dup = [];
+        if (ex.distanceCm !== distance) dup.push({ field: 'distance', msg: 'расстояние отличается от стр. ' + ex.sheetRow + ' (в базе ' + ex.distanceCm + ' см)' });
+        if (ex.timeSec !== timeSec) dup.push({ field: 'time', msg: 'время отличается от стр. ' + ex.sheetRow + ' (в базе ' + formatHms(ex.timeSec) + ')' });
+        exclude(dup);
       }
     }
   }
@@ -371,11 +529,13 @@ function main() {
       const heads = {};
       for (const h of VALID_HEADS) {
         const key = String(h);
-        heads[key] = f.headsMap[key] || { distanceCm: 0, timeSec: 0 };
+        const hm = f.headsMap[key];
+        heads[key] = hm ? { distanceCm: hm.distanceCm, timeSec: hm.timeSec } : { distanceCm: 0, timeSec: 0 };
       }
       f.heads = heads;
       if (f.fileDescription == null) f.fileDescription = DEFAULT_DESC;
       delete f.headsMap;
+      delete f.descRow;
     }
   }
 
@@ -393,10 +553,64 @@ function main() {
 
   fs.writeFileSync(OUT, banner + body, 'utf8');
 
+  // ---------- report.js ----------
+
+  // Одно имя файла в разных изделиях (в таблице это запрещено пояснением к столбцу P).
+  const byFile = new Map();
+  for (const p of products) for (const f of p.files) {
+    if (!byFile.has(f.fileName)) byFile.set(f.fileName, []);
+    if (byFile.get(f.fileName).indexOf(p.product) === -1) byFile.get(f.fileName).push(p.product);
+  }
+  const sharedFiles = [...byFile].filter(([, list]) => list.length > 1).map(([fileName, list]) => ({ fileName: fileName, products: list }));
+
+  const inData = new Set(products.flatMap((p) => p.files.map((f) => fileKey(p.product, f.fileName))));
+  const productsInData = new Set(products.map((p) => p.product));
+  const missingFiles = new Set(excluded
+    .map((e) => fileKey(e.values.product, e.values.fileName))
+    .filter((k) => !inData.has(k)));
+
+  const allFiles = products.flatMap((p) => p.files);
+  const has = (f, h) => f.heads[h].timeSec > 0;
+  const srcStat = fs.statSync(SRC);
+
+  const columns = {};
+  for (const key of Object.keys(HEADER_NAMES)) {
+    columns[key] = { letter: colLetter(IDX[key]), header: detected.headers[key] || HEADER_NAMES[key][0] };
+  }
+
+  const report = {
+    generatedAt: new Date().toISOString(),
+    sourceModifiedAt: srcStat.mtime.toISOString(),
+    backupFile: backupPath ? path.basename(backupPath) : null,
+    columns: columns,
+    stats: {
+      products: products.length,
+      files: totalFiles,
+      files2: allFiles.filter((f) => has(f, '2')).length,
+      files4: allFiles.filter((f) => has(f, '4')).length,
+      filesBoth: allFiles.filter((f) => has(f, '2') && has(f, '4')).length,
+      sheetRowsWithFile: stats.dataRows + stats.skippedMachine,
+      excludedRows: excluded.length,
+      missingFiles: missingFiles.size,
+      missingProducts: [...productsInSheet].filter((p) => !productsInData.has(p)),
+    },
+    excluded: groupRows(excluded),
+    attention: groupRows(attention),
+    sharedFiles: sharedFiles,
+    changes: diffData(prevData, products),
+  };
+
+  fs.writeFileSync(REPORT_JS,
+    '// report.js — АВТОГЕНЕРАЦИЯ скриптом parse.js вместе с data.js. Не редактировать вручную.\n' +
+    '// Показывается на странице report.html: что не попало в базу и почему, статистика обновления.\n\n' +
+    'const REPORT = ' + JSON.stringify(report, null, 2) + ';\n\n' +
+    "if (typeof module !== 'undefined' && module.exports) { module.exports = REPORT; }\n", 'utf8');
+
   const L = [];
   L.push('=== ОТЧЁТ ПАРСЕРА source/sheet.html ===');
-  L.push('Сгенерировано: ' + new Date().toISOString());
+  L.push('Сгенерировано: ' + report.generatedAt);
   L.push('Бэкап предыдущего data.js: ' + (backupPath ? path.basename(backupPath) : 'нет (файл не существовал)'));
+  L.push('Наглядная версия отчёта: report.html');
   L.push('');
   L.push('-- Определение столбцов --');
   if (colNotes.length === 0) L.push('  все столбцы найдены по заголовкам на ожидаемых индексах.');
@@ -405,16 +619,18 @@ function main() {
   L.push('');
   L.push('-- Счётчики --');
   L.push('  строк в сетке: ' + stats.rows);
-  L.push('  строк-данных (файл+стенок): ' + stats.dataRows);
+  L.push('  строк-данных (файл+станок): ' + stats.dataRows);
   L.push('  изделий: ' + products.length);
   L.push('  файлов: ' + totalFiles);
   L.push('');
-  L.push('-- Пропуски строк-данных --');
+  L.push('-- Пропуски строк с файлом (по первой причине) --');
+  L.push('  номер станка не число: ' + stats.skippedMachine);
   L.push('  AB-гейт (нет времени резки): ' + stats.skippedNoAB);
   L.push('  голова не 2/4: ' + stats.skippedHeads);
   L.push('  расстояние-брак: ' + stats.skippedDistance);
   L.push('  AD-время брак: ' + stats.skippedTime);
   L.push('  нет изделия: ' + stats.skippedNoProduct);
+  L.push('  коллизия (дубль с другими значениями): ' + stats.skippedCollision);
   L.push('');
   L.push('-- Коллизии file+heads (оставлено первое): ' + collisions.length + ' --');
   collisions.forEach((c) => L.push('  ' + c));
@@ -429,15 +645,10 @@ function main() {
 
   console.log('ГОТОВО -> ' + OUT);
   if (backupPath) console.log('Бэкап -> ' + backupPath);
-  console.log('Отчёт  -> ' + REPORT);
+  console.log('Отчёт  -> ' + REPORT + ', ' + REPORT_JS);
   console.log('Изделий: ' + products.length + ' | файлов: ' + totalFiles);
-  console.log('Пропуски: AB ' + stats.skippedNoAB + ' | голова ' + stats.skippedHeads + ' | расст ' + stats.skippedDistance + ' | время ' + stats.skippedTime + ' | изд ' + stats.skippedNoProduct);
+  console.log('Пропуски: станок ' + stats.skippedMachine + ' | AB ' + stats.skippedNoAB + ' | голова ' + stats.skippedHeads + ' | расст ' + stats.skippedDistance + ' | время ' + stats.skippedTime + ' | изд ' + stats.skippedNoProduct + ' | дубль ' + stats.skippedCollision);
   console.log('Коллизий: ' + collisions.length + ' | предупреждений: ' + warnings.length + ' | инфо: ' + infos.length);
-
-  const sne = products.find((p) => p.product && p.product.indexOf('Снегурка 2') !== -1);
-  console.log('');
-  console.log('--- ПРОВЕРКА: Коробка НГ (Снегурка 2) ---');
-  console.log(JSON.stringify(sne, null, 2));
 }
 
 main();

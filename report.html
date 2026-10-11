@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Справочник по таблице и отчёт базы</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main class="app">
+
+    <header class="topbar">
+        <h1>Справочник по таблице и отчёт базы</h1>
+        <a class="topbar-link" href="index.html">
+            <span class="topbar-go">← К сменному заданию</span>
+        </a>
+    </header>
+
+    <!-- 1. Как заполнять исходную таблицу (буквы столбцов — из последнего парса) -->
+    <section class="panel">
+        <header class="panel-head">
+            <h2>Как заполнять исходную таблицу</h2>
+            <span class="hint">Строка попадает в базу, только если все обязательные столбцы заполнены верно</span>
+        </header>
+        <div class="table-wrap">
+            <table class="data-table guide-table">
+                <thead>
+                    <tr>
+                        <th class="g-col">Столбец</th>
+                        <th class="g-name">Заголовок</th>
+                        <th class="g-req"></th>
+                        <th>Что вписать</th>
+                        <th class="g-ex">Правильно</th>
+                        <th class="g-ex">Неправильно</th>
+                        <th class="g-res">Если неправильно</th>
+                    </tr>
+                </thead>
+                <tbody id="guideRows"></tbody>
+            </table>
+        </div>
+
+        <div class="sample">
+            <div class="sample-title">Пример правильно заполненного файла: строки для 2 и для 4 голов</div>
+            <div class="table-wrap">
+                <table class="sheet" id="sampleSheet"></table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. Последнее обновление базы -->
+    <section class="panel">
+        <header class="panel-head">
+            <h2>Последнее обновление базы</h2>
+            <span class="hint" id="parseDate"></span>
+        </header>
+        <div id="statsBlock"></div>
+    </section>
+
+    <!-- 3. Не попало в базу -->
+    <section class="panel">
+        <header class="panel-head">
+            <h2>Не попало в базу — исправьте в таблице</h2>
+            <div class="legend-inline">
+                <span><i class="sw sw-empty"></i>не заполнено</span>
+                <span><i class="sw sw-bad"></i>заполнено неверно</span>
+            </div>
+        </header>
+        <div id="excludedBlock"></div>
+    </section>
+
+    <!-- 4. Попало, но проверьте -->
+    <section class="panel">
+        <header class="panel-head">
+            <h2>Попало в базу, но стоит проверить</h2>
+        </header>
+        <div id="attentionBlock"></div>
+    </section>
+
+</main>
+
+<script src="report.js"></script>
+<script src="report-view.js"></script>
+</body>
+</html>
