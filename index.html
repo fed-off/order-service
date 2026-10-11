@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сменное задание — лазерная резка</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main class="app no-print">
+
+    <!-- 1. Параметры смены -->
+    <section class="panel">
+        <header class="panel-head">
+            <h2><span class="step">01</span>Параметры смены</h2>
+        </header>
+        <div class="row row-shift">
+            <div class="field field-date">
+                <label for="shiftDate">Дата смены</label>
+                <input type="date" id="shiftDate">
+            </div>
+            <div class="field field-operator">
+                <label for="operatorName">ФИО оператора</label>
+                <input type="text" id="operatorName" placeholder="Иванов И.И." autocomplete="off">
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. Назначение изделий на станок -->
+    <section class="panel">
+        <header class="panel-head">
+            <h2><span class="step">02</span>Назначение изделий на станок</h2>
+            <span class="hint">↑ ↓ — навигация по списку, Enter — выбор / добавление, Esc — закрыть</span>
+        </header>
+
+        <div class="row row-assign">
+            <div class="field field-machine">
+                <label for="machineSelect">Станок</label>
+                <select id="machineSelect"></select>
+            </div>
+
+            <fieldset class="field field-heads">
+                <legend>Кол-во голов</legend>
+                <div class="segmented" role="radiogroup">
+                    <label class="seg">
+                        <input type="radio" name="heads" value="2" checked>
+                        <span>2</span>
+                    </label>
+                    <label class="seg">
+                        <input type="radio" name="heads" value="4">
+                        <span>4</span>
+                    </label>
+                </div>
+            </fieldset>
+
+            <div class="field field-search">
+                <label for="fileSearch">Изделие / файл</label>
+                <div class="combo">
+                    <input type="text" id="fileSearch" placeholder="Начните вводить название изделия, файла или детали…"
+                           autocomplete="off" spellcheck="false"
+                           role="combobox" aria-expanded="false" aria-controls="searchResults" aria-autocomplete="list">
+                    <button type="button" class="combo-clear" id="searchClear" title="Очистить" hidden>×</button>
+                    <div class="combo-list" id="searchResults" role="listbox" hidden></div>
+                </div>
+            </div>
+
+            <div class="field field-runs">
+                <label for="runsInput">Запусков</label>
+                <div class="stepper">
+                    <button type="button" class="step-btn" data-step="-1" tabindex="-1" aria-label="Меньше">−</button>
+                    <input type="number" id="runsInput" value="1" min="1" step="1" inputmode="numeric">
+                    <button type="button" class="step-btn" data-step="1" tabindex="-1" aria-label="Больше">+</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Предварительный просмотр добавляемой позиции -->
+        <div class="preview" id="preview" data-state="empty">
+            <div class="preview-title">Будет добавлено</div>
+            <div class="preview-grid">
+                <div class="out out-product">
+                    <span class="out-label">Изделие</span>
+                    <output id="pvProduct">—</output>
+                </div>
+                <div class="out out-file">
+                    <span class="out-label">Имя файла</span>
+                    <output id="pvFile" class="file-cell"><span class="file-name">—</span></output>
+                </div>
+                <div class="out">
+                    <span class="out-label">Расст. между головами</span>
+                    <output id="pvDistance" class="num">—</output>
+                </div>
+                <div class="out">
+                    <span class="out-label">Запусков</span>
+                    <output id="pvRuns" class="num">—</output>
+                </div>
+                <div class="out">
+                    <span class="out-label">Время на файл</span>
+                    <output id="pvTimeOne" class="num">—</output>
+                </div>
+                <div class="out out-accent">
+                    <span class="out-label">Общее время</span>
+                    <output id="pvTimeTotal" class="num">—</output>
+                </div>
+            </div>
+            <div class="preview-foot">
+                <div class="load">
+                    <span class="out-label">Загрузка станка</span>
+                    <output id="pvLoad" class="num">—</output>
+                </div>
+                <div class="preview-msg" id="previewMsg" hidden></div>
+                <button type="button" class="btn btn-primary" id="addBtn" disabled>Добавить в задание станка</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. Сформированное задание -->
+    <section class="panel">
+        <header class="panel-head">
+            <h2><span class="step">03</span>Сменное задание по станкам</h2>
+            <div class="summary" id="summary"></div>
+        </header>
+
+        <div id="jobsContainer"></div>
+
+        <div class="panel-actions">
+            <button type="button" class="btn btn-ghost" id="clearBtn" disabled>Очистить задание</button>
+            <button type="button" class="btn btn-success" id="printBtn" disabled>Скачать / напечатать (PDF)</button>
+        </div>
+    </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- Область печати (A4). Внешняя таблица с thead/tfoot даёт поля на каждой странице,
+     при этом @page margin: 0 отключает колонтитулы браузера (URL, дату, заголовок). -->
+<div id="pdfArea" class="print-only">
+    <table class="print-frame">
+        <thead><tr><td><div class="print-gap"></div></td></tr></thead>
+        <tfoot><tr><td><div class="print-gap"></div></td></tr></tfoot>
+        <tbody><tr><td>
+            <div class="pdf-header">
+                <h2>СМЕННОЕ ЗАДАНИЕ НА ЛАЗЕРНУЮ РЕЗКУ</h2>
+                <div class="pdf-meta">
+                    <span><strong>Оператор:</strong> <span id="pdfOperator">-</span></span>
+                    <span><strong>Дата:</strong> <span id="pdfDate">-</span></span>
+                </div>
+            </div>
+            <div id="pdfMachinesContent"></div>
+        </td></tr></tbody>
+    </table>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
