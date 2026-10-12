@@ -1,163 +1,190 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Сменное задание — лазерная резка</title>
+    <title>Планировщик сменных заданий</title>
+    <meta name="description" content="Расчет загрузки и формирование списка изделий для резки на лазерном станке">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="icon" href="favicon/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="favicon/favicon96-96.png" type="image/png" sizes="96x96">
+    <link rel="icon" href="favicon/favicon180-180.png" type="image/png" sizes="180x180">
+    <link rel="icon" href="favicon/favicon192-192.png" type="image/png" sizes="192x192">
+    <link rel="icon" href="favicon/favicon512-512.png" type="image/png" sizes="512x512">
     <link rel="stylesheet" href="style.css">
+    <!-- open graph meta -->
+    <meta property="og:title" content="Планировщик сменных заданий">
+    <meta property="og:description"
+        content="Расчет загрузки и формирование списка изделий для резки на лазерном станке">
+    <meta property="og:image" content="https://fed-off.github.io/favicon/favicon512-512.png/">
+    <meta property="og:url" content="https://fed-off.github.io/order-service/">
+    <meta property="og:type" content="website">
 </head>
+
 <body>
 
-<main class="app no-print">
+    <main class="app no-print">
 
-    <header class="topbar">
-        <h1>Сменное задание — лазерная резка</h1>
-        <a class="topbar-link" href="report.html" id="reportLink">
-            <span class="topbar-meta" id="baseInfo"></span>
-            <span class="topbar-go">Справочник по таблице и отчёт базы →</span>
-        </a>
-    </header>
-
-    <!-- 1. Параметры смены -->
-    <section class="panel">
-        <header class="panel-head">
-            <h2>Параметры смены</h2>
-        </header>
-        <div class="row row-shift">
-            <div class="field field-date">
-                <label for="shiftDate">Дата смены</label>
-                <input type="date" id="shiftDate">
-            </div>
-            <div class="field field-operator">
-                <label for="operatorName">ФИО оператора</label>
-                <input type="text" id="operatorName" placeholder="Иванов И.И." autocomplete="off">
-            </div>
-        </div>
-    </section>
-
-    <!-- 2. Назначение изделий на станок -->
-    <section class="panel">
-        <header class="panel-head">
-            <h2>Назначение изделий на станок</h2>
-            <span class="hint">↑ ↓ — навигация по списку, Enter — выбор / добавление, Esc — закрыть</span>
+        <header class="topbar">
+            <h1>Планировщик сменных заданий</h1>
+            <a class="topbar-link" href="report.html" id="reportLink">
+                <span class="topbar-meta" id="baseInfo"></span>
+                <span class="topbar-go">Справочник по таблице и отчёт базы →</span>
+            </a>
         </header>
 
-        <div class="row row-assign">
-            <div class="field field-machine">
-                <label for="machineSelect">Станок</label>
-                <select id="machineSelect"></select>
-            </div>
-
-            <fieldset class="field field-heads">
-                <legend>Кол-во голов</legend>
-                <div class="segmented" role="radiogroup">
-                    <label class="seg">
-                        <input type="radio" name="heads" value="2" checked>
-                        <span>2</span>
-                    </label>
-                    <label class="seg">
-                        <input type="radio" name="heads" value="4">
-                        <span>4</span>
-                    </label>
+        <!-- 1. Параметры смены -->
+        <section class="panel">
+            <header class="panel-head">
+                <h2>Параметры смены</h2>
+            </header>
+            <div class="row row-shift">
+                <div class="field field-date">
+                    <label for="shiftDate">Дата смены</label>
+                    <input type="date" id="shiftDate">
                 </div>
-            </fieldset>
-
-            <div class="field field-search">
-                <label for="fileSearch">Изделие / файл</label>
-                <div class="combo">
-                    <input type="text" id="fileSearch" placeholder="Начните вводить название изделия, файла или детали…"
-                           autocomplete="off" spellcheck="false"
-                           role="combobox" aria-expanded="false" aria-controls="searchResults" aria-autocomplete="list">
-                    <button type="button" class="combo-clear" id="searchClear" title="Очистить" hidden>×</button>
-                    <div class="combo-list" id="searchResults" role="listbox" hidden></div>
+                <div class="field field-operator">
+                    <label for="operatorName">ФИО оператора</label>
+                    <input type="text" id="operatorName" placeholder="Иванов И.И." autocomplete="off">
                 </div>
             </div>
+        </section>
 
-            <div class="field field-runs">
-                <label for="runsInput">Запусков</label>
-                <div class="stepper">
-                    <button type="button" class="step-btn" data-step="-1" tabindex="-1" aria-label="Меньше">−</button>
-                    <input type="number" id="runsInput" value="1" min="1" step="1" inputmode="numeric">
-                    <button type="button" class="step-btn" data-step="1" tabindex="-1" aria-label="Больше">+</button>
-                </div>
-            </div>
-        </div>
+        <!-- 2. Назначение изделий на станок -->
+        <section class="panel">
+            <header class="panel-head">
+                <h2>Назначение изделий на станок</h2>
+                <span class="hint">↑ ↓ — навигация по списку, Enter — выбор / добавление, Esc — закрыть</span>
+            </header>
 
-        <!-- Предварительный просмотр добавляемой позиции -->
-        <!-- data-mode="manual": вместо значений из базы — поля ручного ввода (m*) -->
-        <div class="preview" id="preview" data-state="empty" data-mode="db">
-            <div class="preview-title">
-                <span id="previewTitle">Будет добавлено</span>
-                <button type="button" class="btn-mini" id="manualBtn">Ввести вручную</button>
-            </div>
-            <div class="preview-grid">
-                <div class="out out-product">
-                    <label class="out-label" for="mProduct">Изделие</label>
-                    <output id="pvProduct">—</output>
-                    <input type="text" id="mProduct" class="m-input" placeholder="Название изделия" autocomplete="off">
+            <div class="row row-assign">
+                <div class="field field-machine">
+                    <label for="machineSelect">Станок</label>
+                    <select id="machineSelect"></select>
                 </div>
-                <div class="out out-file">
-                    <label class="out-label" for="mFile">Имя файла</label>
-                    <output id="pvFile" class="file-cell"><span class="file-name">—</span></output>
-                    <input type="text" id="mFile" class="m-input m-file" placeholder="Имя файла" autocomplete="off" spellcheck="false">
-                    <input type="text" id="mDesc" class="m-input m-desc" placeholder="Детали (необязательно)" autocomplete="off">
-                </div>
-                <div class="out">
-                    <label class="out-label" for="mDistance">Расст. между головами</label>
-                    <output id="pvDistance" class="num">—</output>
-                    <div class="m-unit m-input" data-unit="см">
-                        <input type="text" id="mDistance" class="num" placeholder="0" inputmode="decimal" autocomplete="off">
+
+                <fieldset class="field field-heads">
+                    <legend>Кол-во голов</legend>
+                    <div class="segmented" role="radiogroup">
+                        <label class="seg">
+                            <input type="radio" name="heads" value="2" checked>
+                            <span>2</span>
+                        </label>
+                        <label class="seg">
+                            <input type="radio" name="heads" value="4">
+                            <span>4</span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <div class="field field-search">
+                    <label for="fileSearch">Изделие / файл</label>
+                    <div class="combo">
+                        <input type="text" id="fileSearch"
+                            placeholder="Начните вводить название изделия, файла или детали…" autocomplete="off"
+                            spellcheck="false" role="combobox" aria-expanded="false" aria-controls="searchResults"
+                            aria-autocomplete="list">
+                        <button type="button" class="combo-clear" id="searchClear" title="Очистить" hidden>×</button>
+                        <div class="combo-list" id="searchResults" role="listbox" hidden></div>
                     </div>
                 </div>
-                <div class="out">
-                    <span class="out-label">Запусков</span>
-                    <output id="pvRuns" class="num">—</output>
-                </div>
-                <div class="out">
-                    <label class="out-label" for="mTime">Время на файл</label>
-                    <output id="pvTimeOne" class="num">—</output>
-                    <input type="text" id="mTime" class="m-input num" placeholder="чч:мм:сс" inputmode="numeric" maxlength="8" autocomplete="off">
-                </div>
-                <div class="out out-accent">
-                    <span class="out-label">Общее время</span>
-                    <output id="pvTimeTotal" class="num">—</output>
+
+                <div class="field field-runs">
+                    <label for="runsInput">Запусков</label>
+                    <div class="stepper">
+                        <button type="button" class="step-btn" data-step="-1" tabindex="-1"
+                            aria-label="Меньше">−</button>
+                        <input type="number" id="runsInput" value="1" min="1" step="1" inputmode="numeric">
+                        <button type="button" class="step-btn" data-step="1" tabindex="-1"
+                            aria-label="Больше">+</button>
+                    </div>
                 </div>
             </div>
-            <div class="preview-foot">
-                <div class="load">
-                    <span class="out-label">Загрузка станка</span>
-                    <output id="pvLoad" class="num">—</output>
+
+            <!-- Предварительный просмотр добавляемой позиции -->
+            <!-- data-mode="manual": вместо значений из базы — поля ручного ввода (m*) -->
+            <div class="preview" id="preview" data-state="empty" data-mode="db">
+                <div class="preview-title">
+                    <span id="previewTitle">Будет добавлено</span>
+                    <button type="button" class="btn-mini" id="manualBtn">Ввести вручную</button>
                 </div>
-                <div class="preview-msg" id="previewMsg" hidden></div>
-                <button type="button" class="btn btn-primary" id="addBtn" disabled>Добавить в задание станка</button>
+                <div class="preview-grid">
+                    <div class="out out-product">
+                        <label class="out-label" for="mProduct">Изделие</label>
+                        <output id="pvProduct">—</output>
+                        <input type="text" id="mProduct" class="m-input" placeholder="Название изделия"
+                            autocomplete="off">
+                    </div>
+                    <div class="out out-file">
+                        <label class="out-label" for="mFile">Имя файла</label>
+                        <output id="pvFile" class="file-cell"><span class="file-name">—</span></output>
+                        <input type="text" id="mFile" class="m-input m-file" placeholder="Имя файла" autocomplete="off"
+                            spellcheck="false">
+                        <input type="text" id="mDesc" class="m-input m-desc" placeholder="Детали (необязательно)"
+                            autocomplete="off">
+                    </div>
+                    <div class="out">
+                        <label class="out-label" for="mDistance">Расст. между головами</label>
+                        <output id="pvDistance" class="num">—</output>
+                        <div class="m-unit m-input" data-unit="см">
+                            <input type="text" id="mDistance" class="num" placeholder="0" inputmode="decimal"
+                                autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="out">
+                        <span class="out-label">Запусков</span>
+                        <output id="pvRuns" class="num">—</output>
+                    </div>
+                    <div class="out">
+                        <label class="out-label" for="mTime">Время на файл</label>
+                        <output id="pvTimeOne" class="num">—</output>
+                        <input type="text" id="mTime" class="m-input num" placeholder="чч:мм:сс" inputmode="numeric"
+                            maxlength="8" autocomplete="off">
+                    </div>
+                    <div class="out out-accent">
+                        <span class="out-label">Общее время</span>
+                        <output id="pvTimeTotal" class="num">—</output>
+                    </div>
+                </div>
+                <div class="preview-foot">
+                    <div class="load">
+                        <span class="out-label">Загрузка станка</span>
+                        <output id="pvLoad" class="num">—</output>
+                    </div>
+                    <div class="preview-msg" id="previewMsg" hidden></div>
+                    <button type="button" class="btn btn-primary" id="addBtn" disabled>Добавить в задание
+                        станка</button>
+                </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- 3. Сформированное задание -->
-    <section class="panel">
-        <header class="panel-head">
-            <h2>Сменное задание по станкам</h2>
-            <div class="summary" id="summary"></div>
-        </header>
+        <!-- 3. Сформированное задание -->
+        <section class="panel">
+            <header class="panel-head">
+                <h2>Сменное задание по станкам</h2>
+                <div class="summary" id="summary"></div>
+            </header>
 
-        <div id="jobsContainer"></div>
+            <div id="jobsContainer"></div>
 
-        <div class="panel-actions">
-            <button type="button" class="btn btn-ghost" id="clearBtn" disabled>Очистить задание</button>
-            <button type="button" class="btn btn-success" id="printBtn" disabled>Скачать / напечатать (PDF)</button>
-        </div>
-    </section>
-</main>
+            <div class="panel-actions">
+                <button type="button" class="btn btn-ghost" id="clearBtn" disabled>Очистить задание</button>
+                <button type="button" class="btn btn-success" id="printBtn" disabled>Скачать / напечатать (PDF)</button>
+            </div>
+        </section>
+    </main>
 
-<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<!-- Область печати (A4). Страницы (.pdf-page) собирает app.js: разбивка и нумерация
+    <!-- Область печати (A4). Страницы (.pdf-page) собирает app.js: разбивка и нумерация
      считаются заранее, поэтому @page margin: 0 отключает колонтитулы браузера (URL, дату). -->
-<div id="pdfArea" class="print-only pdf-sheet"></div>
+    <div id="pdfArea" class="print-only pdf-sheet"></div>
 
-<script src="data.js"></script>
-<script src="report.js"></script>
-<script src="app.js"></script>
+    <script src="data.js"></script>
+    <script src="report.js"></script>
+    <script src="app.js"></script>
 </body>
+
 </html>
